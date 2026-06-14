@@ -1,0 +1,1374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MacBook Pro Keyboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tone@15.0.4/build/Tone.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ─── Base scale (1.8×) ─────────────────────────────────────────────────── */
+:root {
+  --u: 1.8;
+  --gap: calc(4px * var(--u));
+  --kr:  calc(5px * var(--u));
+  --plate-a: 1;
+  --glow-color: #ffffff;            /* wave flash overlay colour — set by colour picker */
+  /* key appearance — JS overrides these on the shell element, cascades to .key children */
+  --key-bg:        linear-gradient(175deg, #2A2A2D 0%, #1E1E21 50%, #161618 100%);
+  --key-color:     #CECECE;
+  --key-sub-color: #888890;
+  --key-shadow:
+    inset 0  calc(1px * var(--u)) 0 rgba(255,255,255,0.10),
+    inset 0 calc(-1px * var(--u)) 0 rgba(0,0,0,0.55),
+    inset  calc(1px * var(--u)) 0 0 rgba(255,255,255,0.04),
+    inset calc(-1px * var(--u)) 0 0 rgba(0,0,0,0.30),
+    0 calc(3px * var(--u)) calc(5px * var(--u)) rgba(0,0,0,0.35),
+    0 calc(1px * var(--u)) calc(2px * var(--u)) rgba(0,0,0,0.25);
+}
+
+#bg-fade {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+}
+
+body {
+  background: linear-gradient(135deg, #CECECE 0%, #8E8E94 100%);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  padding: 80px 20px 32px;
+  gap: 28px;
+}
+
+/* ─── Keyboard shell ─────────────────────────────────────────────────────── */
+.keyboard-shell {
+  background: transparent;
+  border-radius: calc(18px * var(--u));
+  padding: calc(16px * var(--u)) calc(18px * var(--u)) calc(22px * var(--u));
+  width: calc(756px * var(--u));   /* ≈ 1361px */
+  position: relative;
+  transform-origin: top center;
+}
+
+/* Silver plate layer — background + all shell shadows.
+   Opacity drives via --plate-a so the whole plate fades cleanly to 0. */
+.keyboard-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: calc(18px * var(--u));
+  background: linear-gradient(170deg,
+    #D6D6DC 0%, #CACACE 35%, #C2C2C8 65%, #B8B8BF 100%);
+  box-shadow:
+    0 calc(35px * var(--u)) calc(90px * var(--u)) rgba(0,0,0,0.08),
+    0 calc(10px * var(--u)) calc(25px * var(--u)) rgba(0,0,0,0.05),
+    0 calc(2px  * var(--u)) calc(6px  * var(--u)) rgba(0,0,0,0.02),
+    inset 0  1px 0 rgba(255,255,255,0.55),
+    inset 0 -1px 0 rgba(0,0,0,0.12),
+    inset  1px 0 0 rgba(255,255,255,0.30),
+    inset -1px 0 0 rgba(0,0,0,0.08);
+  opacity: var(--plate-a, 1);
+  pointer-events: none;
+  z-index: 0;
+  transition: opacity 0.08s linear;
+}
+
+/* Recessed bezel inset — also fades with plate */
+.keyboard-shell::after {
+  content: '';
+  position: absolute;
+  inset: calc(12px * var(--u));
+  border-radius: calc(10px * var(--u));
+  box-shadow:
+    inset 0 calc(2px * var(--u)) calc(8px * var(--u)) rgba(0,0,0,0.20),
+    inset 0 1px   calc(3px * var(--u)) rgba(0,0,0,0.10);
+  opacity: var(--plate-a, 1);
+  pointer-events: none;
+  z-index: 0;
+  transition: opacity 0.08s linear;
+}
+
+/* White mode: plate is a dark 10% translucent overlay — no coloured aluminium */
+.white-mode.keyboard-shell::before {
+  background: rgba(0, 0, 0, 0.10);
+  box-shadow: none;
+}
+.white-mode.keyboard-shell::after {
+  box-shadow: none;
+}
+
+/* Keys must sit above the pseudo-element layers */
+#keyboard {
+  position: relative;
+  z-index: 1;
+}
+
+/* ─── Key rows ───────────────────────────────────────────────────────────── */
+.key-row {
+  display: flex;
+  gap: var(--gap);
+  margin-bottom: var(--gap);
+}
+.key-row:last-child { margin-bottom: 0; }
+.key-row.fn-row { margin-bottom: calc(var(--gap) * 2); }
+
+/* ─── Keys ───────────────────────────────────────────────────────────────── */
+.key {
+  background: var(--key-bg);
+  color: var(--key-color);
+  border-radius: var(--kr);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: calc(42px * var(--u));    /* ≈ 76px */
+  min-width: 0;
+  cursor: pointer;
+  position: relative;
+  user-select: none;
+  transform-origin: center center;
+  transition: filter 0.12s ease;
+  box-shadow: var(--key-shadow);
+  font-size: calc(11px * var(--u));
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+}
+
+.key.fn-key {
+  height: calc(28px * var(--u));   /* ≈ 50px */
+  font-size: calc(10px * var(--u));
+  font-weight: 400;
+}
+
+.key.half-key {
+  height: calc(19px * var(--u));   /* fallback; flex:1 inside arrow-ud distributes evenly */
+  font-size: calc(10px * var(--u));
+  font-weight: 400;
+}
+
+/* Hover */
+.key:hover { filter: brightness(1.45); }
+.white-mode .key:hover { background: rgba(255,255,255,0.15); filter: none; }
+
+/* Pressed */
+.key.active {
+  transform: scale(0.90);
+  filter: brightness(0.60) !important;
+  box-shadow:
+    inset 0 calc(1px * var(--u)) 0 rgba(255,255,255,0.04),
+    inset 0 calc(-1px * var(--u)) 0 rgba(0,0,0,0.8),
+    0 calc(1px * var(--u)) calc(2px * var(--u)) rgba(0,0,0,0.4);
+  transition: transform 0.055s ease, filter 0.055s ease, box-shadow 0.055s ease;
+}
+
+/* White mode: active key flips to solid white with dark text, no shadows */
+.white-mode .key.active {
+  --key-color:     #1A1A1A;
+  --key-sub-color: #555555;
+  background: rgba(255, 255, 255, 1.0);
+  filter: brightness(1) !important;
+  box-shadow: none !important;
+  transform: scale(0.90);
+  transition: transform 0.055s ease, filter 0.055s ease, box-shadow 0.055s ease;
+}
+
+/* ─── Ripple animation ───────────────────────────────────────────────────── */
+.key.ripple-wave {
+  animation: ripple-pulse var(--r-dur, 420ms) ease-out var(--r-delay, 0ms) both;
+}
+
+@keyframes ripple-pulse {
+  0%   { filter: brightness(1);                     transform: scale(1); }
+  28%  { filter: brightness(var(--r-bright, 1.55)); transform: scale(var(--r-max, 1.045)); }
+  70%  { filter: brightness(1);                     transform: scale(var(--r-min, 1)); }
+  100% { filter: brightness(1);                     transform: scale(1); }
+}
+
+/* ─── Key label structure ────────────────────────────────────────────────── */
+.key-sub {
+  font-size: calc(9px * var(--u));
+  color: var(--key-sub-color);
+  line-height: 1;
+  margin-bottom: calc(2px * var(--u));
+  font-weight: 400;
+}
+
+.key-main {
+  line-height: 1;
+  text-align: center;
+}
+
+/* Bottom-row modifier keys: symbol large, word tiny below */
+.key-modifier .key-sub {
+  font-size: calc(13px * var(--u));
+  color: var(--key-color);        /* inherits white in white mode, #CECECE in dark */
+  margin-bottom: calc(1px * var(--u));
+  font-weight: 300;
+  line-height: 1;
+}
+
+.key-modifier .key-main {
+  font-size: calc(7.5px * var(--u));
+  color: var(--key-sub-color);    /* inherits dimmed variant */
+  letter-spacing: 0;
+}
+
+/* Left-side modifier keys: content right-aligned (symbol top-right, label bottom-right) */
+.key-modifier-right {
+  align-items: flex-end !important;
+  justify-content: space-between !important;
+  padding: calc(7px * var(--u)) calc(7px * var(--u));
+}
+/* Right-side modifier keys: content left-aligned (symbol top-left, label bottom-left) */
+.key-modifier-left {
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  padding: calc(7px * var(--u)) calc(7px * var(--u));
+}
+.key-modifier-right .key-sub,
+.key-modifier-left  .key-sub { margin-bottom: 0; }
+
+/* Power / TouchID button */
+#power-key .key-main {
+  font-size: calc(15px * var(--u));
+  color: #A0A0A8;
+}
+/* Power icon matches key text colour in white mode */
+.white-mode #power-key .key-main {
+  color: var(--key-color);
+}
+
+/* Caps-lock LED dot */
+#caps-lock-key::after {
+  content: '';
+  position: absolute;
+  top: calc(5px * var(--u));
+  right: calc(7px * var(--u));
+  width: calc(4px * var(--u));
+  height: calc(4px * var(--u));
+  border-radius: 50%;
+  background: #00CC44;
+  box-shadow: 0 0 calc(3px * var(--u)) #00CC44;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+#caps-lock-key.caps-on::after { opacity: 1; }
+
+/* ─── Wave-ripple flash overlay (spawned per-key by fireRipple) ─────────── */
+/* Works in both dark and white mode because it's an opaque white layer.    */
+.key-wave-flash {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--glow-color, white);
+  opacity: 0;
+  pointer-events: none;
+  animation: wave-flash var(--r-dur, 420ms) ease-out var(--r-delay, 0ms) both;
+}
+
+@keyframes wave-flash {
+  0%   { opacity: 0; }
+  28%  { opacity: var(--r-flash, 0.20); }
+  100% { opacity: 0; }
+}
+
+/* ─── Holographic shimmer variant ────────────────────────────────────────── */
+/* --shimmer-angle is set per-element in fireRipple() to point away from the  */
+/* pressed key, creating a radial shimmer from the source outward.             */
+.key-wave-flash.shimmer {
+  background: linear-gradient(var(--shimmer-angle, 90deg),
+    rgba(255,   0, 136, 0.55) 0%,
+    rgba(255, 102,   0, 0.55) 16%,
+    rgba(255, 238,   0, 0.55) 33%,
+    rgba(  0, 255, 136, 0.55) 50%,
+    rgba(  0, 136, 255, 0.55) 66%,
+    rgba(170,   0, 255, 0.55) 83%,
+    rgba(255,   0, 136, 0.55) 100%);
+  animation:
+    wave-flash  var(--r-dur, 420ms) ease-out var(--r-delay, 0ms) both,
+    shimmer-hue 0.8s linear infinite;
+}
+@keyframes shimmer-hue {
+  from { filter: hue-rotate(0deg); }
+  to   { filter: hue-rotate(360deg); }
+}
+
+/* ─── Touch ripple (spawned on press) ───────────────────────────────────── */
+.key-ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    transparent        0%,
+    transparent       35%,
+    rgba(255,255,255,0.18) 60%,
+    rgba(255,255,255,0.55) 80%,
+    rgba(255,255,255,0.60) 100%);
+  transform: scale(0);
+  pointer-events: none;
+  animation: key-touch-ripple 0.55s cubic-bezier(0.15, 0.8, 0.35, 1) forwards;
+}
+
+@keyframes key-touch-ripple {
+  0%   { transform: scale(0); opacity: 1; }
+  55%  { opacity: 0.55; }
+  100% { transform: scale(1); opacity: 0; }
+}
+
+/* Arrow-key stacked container — explicit height matches regular key height */
+.arrow-ud {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  height: calc(42px * var(--u));
+  min-width: 0;
+}
+
+/* ─── Controls zone (hover trigger) + panel fade ─────────────────────────── */
+#controls-zone {
+  transform-origin: top center;
+  position: relative;
+}
+
+@keyframes hint-shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+#hint-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  text-align: center;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+  user-select: none;
+  z-index: 10;
+  /* shimmer: white base with a lighter sweep */
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.85) 0%,
+    rgba(255,255,255,0.85) 35%,
+    rgba(255,255,255,1.0)  50%,
+    rgba(255,255,255,0.85) 65%,
+    rgba(255,255,255,0.85) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+#hint-text.shimmer-run {
+  animation: hint-shimmer 1.1s ease-out forwards;
+}
+
+/* Controls panel ─────────────────────────────────────────────────────────── */
+.controls-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 34px;
+  padding: 20px 40px;
+  width: calc(756px * var(--u));
+  transform-origin: top center;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  /* Hidden by default; reveals on zone hover */
+  opacity: 0;
+  transform: scale(0.97);
+  pointer-events: none;
+  transition: opacity 0.22s ease-out, transform 0.22s ease-out;
+}
+
+#controls-zone:hover .controls-panel {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+  transition: opacity 0.28s ease-in, transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ctrl-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 48px;
+  width: 80%;
+}
+
+.ctrl-divider { display: none; }
+
+/* Glow colour + shimmer row */
+.ctrl-glow-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.ctrl-group {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-width: 100px;
+}
+
+.ctrl-group-opts {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+.ctrl-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.ctrl-label {
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  letter-spacing: 0.02em;
+  color: #ffffff;
+  text-shadow: 0 0 4px rgba(0,0,0,0.12);
+}
+
+.ctrl-value {
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: rgba(255,255,255,0.80);
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
+  text-align: right;
+  text-shadow: 0 0 4px rgba(0,0,0,0.12);
+}
+
+.ctrl-group input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 12px;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.05);
+  outline: none;
+  cursor: pointer;
+}
+
+.ctrl-group input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+  transition: transform 0.1s ease;
+}
+
+.ctrl-group input[type=range]::-webkit-slider-thumb:hover {
+  transform: scale(1.12);
+}
+
+.ctrl-group input[type=range]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+  border: none;
+  cursor: pointer;
+}
+
+.ctrl-divider {
+  width: 1px;
+  background: rgba(255,255,255,0.08);
+  align-self: stretch;
+}
+
+/* Two narrow sliders side by side */
+.ctrl-pair {
+  display: flex;
+  gap: 20px;
+  flex: 2 1 320px;
+}
+.ctrl-pair .ctrl-group { flex: 1 1 0; }
+
+/* Option-button groups (key colour, background) */
+.ctrl-group-opts {
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.ctrl-opt-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ctrl-opt {
+  padding: 5px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.65);
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+  white-space: nowrap;
+}
+
+.ctrl-opt:hover {
+  background: rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.95);
+  border-color: rgba(255,255,255,0.32);
+}
+
+.ctrl-opt.active {
+  background: rgba(255,255,255,0.22);
+  color: #ffffff;
+  border-color: rgba(255,255,255,0.45);
+}
+
+/* ─── Background swatch circles ──────────────────────────────────────────── */
+.ctrl-bg-swatches {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+
+.ctrl-bg-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  cursor: pointer;
+  position: relative;
+  border: none;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  flex-shrink: 0;
+  transition: transform 0.14s ease, outline-color 0.14s ease;
+}
+
+.ctrl-bg-swatch:hover  { transform: scale(1.14); }
+.ctrl-bg-swatch.active { outline-color: rgba(255,255,255,0.72); }
+
+/* Hover tooltip */
+.ctrl-bg-swatch::after {
+  content: attr(data-label);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(8,8,14,0.88);
+  color: #E0E0F0;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  padding: 3px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  z-index: 20;
+}
+.ctrl-bg-swatch:hover::after { opacity: 1; }
+
+/* ─── Toggle switch (Keyboard Plate) ─────────────────────────────────────── */
+.ctrl-toggle {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  margin-top: 2px;
+}
+.ctrl-toggle input[type=checkbox] { display: none; }
+.ctrl-toggle-track {
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.05);
+  border: none;
+  position: relative;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+.ctrl-toggle input:checked + .ctrl-toggle-track {
+  background: rgba(255,255,255,0.40);
+}
+.ctrl-toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+  transition: transform 0.2s ease;
+}
+.ctrl-toggle input:checked + .ctrl-toggle-track .ctrl-toggle-thumb {
+  transform: translateX(20px);
+}
+
+/* ─── Glow colour picker ──────────────────────────────────────────────────── */
+.ctrl-color-pick {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.20);
+  cursor: pointer;
+  padding: 0;
+  background: none;
+  margin-top: 2px;
+}
+.ctrl-color-pick::-webkit-color-swatch-wrapper { padding: 0; }
+.ctrl-color-pick::-webkit-color-swatch        { border: none; border-radius: 50%; }
+.ctrl-color-pick::-moz-color-swatch           { border: none; border-radius: 50%; }
+</style>
+</head>
+<body>
+
+<div id="bg-fade"></div>
+
+<div class="keyboard-shell" id="keyboard-shell">
+  <div id="keyboard"></div>
+</div>
+
+<div id="controls-zone">
+<p id="hint-text">Press any on-screen key or your keyboard</p>
+<div class="controls-panel" id="controls-panel">
+
+  <!-- Row 1: Wave Speed · Wave Reach · Key Min Size · Key Max Size -->
+  <div class="ctrl-row">
+    <div class="ctrl-group">
+      <div class="ctrl-header">
+        <span class="ctrl-label">Wave speed</span>
+        <span class="ctrl-value" id="val-speed">1.1</span>
+      </div>
+      <input type="range" id="sl-speed" min="0.1" max="4" step="0.1" value="1.1">
+    </div>
+
+    <div class="ctrl-divider"></div>
+
+    <div class="ctrl-group">
+      <div class="ctrl-header">
+        <span class="ctrl-label">Wave reach</span>
+        <span class="ctrl-value" id="val-reach">750.0 px</span>
+      </div>
+      <input type="range" id="sl-reach" min="100" max="1500" step="50" value="750">
+    </div>
+
+    <div class="ctrl-divider"></div>
+
+    <div class="ctrl-group">
+      <div class="ctrl-header">
+        <span class="ctrl-label">Key min size</span>
+        <span class="ctrl-value" id="val-smin">100.0 %</span>
+      </div>
+      <input type="range" id="sl-smin" min="80" max="100" step="0.5" value="100">
+    </div>
+
+    <div class="ctrl-divider"></div>
+
+    <div class="ctrl-group">
+      <div class="ctrl-header">
+        <span class="ctrl-label">Key max size</span>
+        <span class="ctrl-value" id="val-smax">104.5 %</span>
+      </div>
+      <input type="range" id="sl-smax" min="100" max="125" step="0.5" value="104.5">
+    </div>
+  </div>
+
+  <!-- Row 2: Glow colour + Shimmer · Glow Opacity · Key Colour · Keyboard · Background -->
+  <div class="ctrl-row">
+    <div class="ctrl-group ctrl-group-opts">
+      <div class="ctrl-header"><span class="ctrl-label">Glow colour</span></div>
+      <div class="ctrl-glow-row">
+        <input type="color" id="glow-color-pick" class="ctrl-color-pick" value="#ffffff">
+        <button class="ctrl-opt" id="shimmer-btn">Shimmer</button>
+      </div>
+    </div>
+
+    <div class="ctrl-divider"></div>
+
+    <div class="ctrl-group">
+      <div class="ctrl-header">
+        <span class="ctrl-label">Glow opacity</span>
+        <span class="ctrl-value" id="val-glow">8.0 %</span>
+      </div>
+      <input type="range" id="sl-glow" min="0" max="100" step="1" value="8">
+    </div>
+
+    <div class="ctrl-divider"></div>
+
+    <div class="ctrl-group ctrl-group-opts">
+      <div class="ctrl-header"><span class="ctrl-label">Key colour</span></div>
+      <div class="ctrl-opt-row" id="key-colour-opts">
+        <button class="ctrl-opt active" data-key-style="dark">Dark</button>
+        <button class="ctrl-opt"        data-key-style="white">Light</button>
+      </div>
+    </div>
+
+    <div class="ctrl-divider"></div>
+
+    <div class="ctrl-group ctrl-group-opts">
+      <div class="ctrl-header"><span class="ctrl-label">Keyboard</span></div>
+      <label class="ctrl-toggle">
+        <input type="checkbox" id="plate-toggle" checked>
+        <span class="ctrl-toggle-track">
+          <span class="ctrl-toggle-thumb"></span>
+        </span>
+      </label>
+    </div>
+
+    <div class="ctrl-divider"></div>
+
+    <div class="ctrl-group ctrl-group-opts">
+      <div class="ctrl-header"><span class="ctrl-label">Background</span></div>
+      <div class="ctrl-bg-swatches" id="bg-opts"></div>
+    </div>
+  </div>
+
+</div>
+</div><!-- #controls-zone -->
+
+<script>
+// ─── Layout definition ───────────────────────────────────────────────────────
+const FN_ROW = [
+  { l:'esc',  c:'Escape', f:1.2 },
+  { l:'F1',   c:'F1',     f:1 },
+  { l:'F2',   c:'F2',     f:1 },
+  { l:'F3',   c:'F3',     f:1 },
+  { l:'F4',   c:'F4',     f:1 },
+  { l:'F5',   c:'F5',     f:1 },
+  { l:'F6',   c:'F6',     f:1 },
+  { l:'F7',   c:'F7',     f:1 },
+  { l:'F8',   c:'F8',     f:1 },
+  { l:'F9',   c:'F9',     f:1 },
+  { l:'F10',  c:'F10',    f:1 },
+  { l:'F11',  c:'F11',    f:1 },
+  { l:'F12',  c:'F12',    f:1 },
+  { l:'⏻',    c:null,     f:1.2, id:'power-key' },
+];
+
+const MAIN_ROWS = [
+  [
+    { l:'`',     s:'~', c:'Backquote',    f:1 },
+    { l:'1',     s:'!', c:'Digit1',       f:1 },
+    { l:'2',     s:'@', c:'Digit2',       f:1 },
+    { l:'3',     s:'#', c:'Digit3',       f:1 },
+    { l:'4',     s:'$', c:'Digit4',       f:1 },
+    { l:'5',     s:'%', c:'Digit5',       f:1 },
+    { l:'6',     s:'^', c:'Digit6',       f:1 },
+    { l:'7',     s:'&', c:'Digit7',       f:1 },
+    { l:'8',     s:'*', c:'Digit8',       f:1 },
+    { l:'9',     s:'(', c:'Digit9',       f:1 },
+    { l:'0',     s:')', c:'Digit0',       f:1 },
+    { l:'-',     s:'_', c:'Minus',        f:1 },
+    { l:'=',     s:'+', c:'Equal',        f:1 },
+    { l:'delete',      c:'Backspace',     f:1.5 },
+  ],
+  [
+    { l:'tab',         c:'Tab',           f:1.5 },
+    { l:'Q',           c:'KeyQ',          f:1 },
+    { l:'W',           c:'KeyW',          f:1 },
+    { l:'E',           c:'KeyE',          f:1 },
+    { l:'R',           c:'KeyR',          f:1 },
+    { l:'T',           c:'KeyT',          f:1 },
+    { l:'Y',           c:'KeyY',          f:1 },
+    { l:'U',           c:'KeyU',          f:1 },
+    { l:'I',           c:'KeyI',          f:1 },
+    { l:'O',           c:'KeyO',          f:1 },
+    { l:'P',           c:'KeyP',          f:1 },
+    { l:'[',   s:'{',  c:'BracketLeft',   f:1 },
+    { l:']',   s:'}',  c:'BracketRight',  f:1 },
+    { l:'\\',  s:'|',  c:'Backslash',     f:1.5 },
+  ],
+  [
+    { l:'caps lock',   c:'CapsLock',      f:1.75, id:'caps-lock-key' },
+    { l:'A',           c:'KeyA',          f:1 },
+    { l:'S',           c:'KeyS',          f:1 },
+    { l:'D',           c:'KeyD',          f:1 },
+    { l:'F',           c:'KeyF',          f:1 },
+    { l:'G',           c:'KeyG',          f:1 },
+    { l:'H',           c:'KeyH',          f:1 },
+    { l:'J',           c:'KeyJ',          f:1 },
+    { l:'K',           c:'KeyK',          f:1 },
+    { l:'L',           c:'KeyL',          f:1 },
+    { l:';',   s:':',  c:'Semicolon',     f:1 },
+    { l:"'",   s:'"',  c:'Quote',         f:1 },
+    { l:'return',      c:'Enter',         f:2.25 },
+  ],
+  [
+    { l:'shift',       c:'ShiftLeft',     f:2.35 },
+    { l:'Z',           c:'KeyZ',          f:1 },
+    { l:'X',           c:'KeyX',          f:1 },
+    { l:'C',           c:'KeyC',          f:1 },
+    { l:'V',           c:'KeyV',          f:1 },
+    { l:'B',           c:'KeyB',          f:1 },
+    { l:'N',           c:'KeyN',          f:1 },
+    { l:'M',           c:'KeyM',          f:1 },
+    { l:',',   s:'<',  c:'Comma',         f:1 },
+    { l:'.',   s:'>',  c:'Period',        f:1 },
+    { l:'/',   s:'?',  c:'Slash',         f:1 },
+    { l:'shift',       c:'ShiftRight',    f:2.65 },
+  ],
+];
+
+const BOTTOM_ROW = [
+  { l:'fn',                 c:null,          f:0.85 },
+  { l:'control', s:'^',    c:'ControlLeft', f:1.05, mod:true, modAlign:'right' },
+  { l:'option',  s:'⌥',    c:'AltLeft',     f:1.05, mod:true, modAlign:'right' },
+  { l:'command', s:'⌘',    c:'MetaLeft',    f:1.4,  mod:true, modAlign:'right' },
+  { l:'',                  c:'Space',       f:5.5,  id:'space-key' },
+  { l:'command', s:'⌘',    c:'MetaRight',   f:1.4,  mod:true, modAlign:'left' },
+  { l:'option',  s:'⌥',    c:'AltRight',    f:1.05, mod:true, modAlign:'left' },
+];
+
+// ─── DOM builder ─────────────────────────────────────────────────────────────
+const codeToEl = new Map();
+const allKeyEls = [];
+
+function makeKeyEl(data, isFn = false, isHalf = false) {
+  const el = document.createElement('div');
+  let cls = 'key';
+  if (isFn)    cls += ' fn-key';
+  if (isHalf)  cls += ' half-key';
+  if (data.mod) {
+    cls += ' key-modifier';
+    if      (data.modAlign === 'right') cls += ' key-modifier-right';
+    else if (data.modAlign === 'left')  cls += ' key-modifier-left';
+  }
+  el.className = cls;
+  el.style.flex = data.f || 1;
+
+  if (data.s) {
+    const sub = document.createElement('span');
+    sub.className = 'key-sub';
+    sub.textContent = data.s;
+    el.appendChild(sub);
+  }
+  const main = document.createElement('span');
+  main.className = 'key-main';
+  main.textContent = data.l;
+  el.appendChild(main);
+
+  if (data.id) el.id = data.id;
+  if (data.c)  codeToEl.set(data.c, el);
+
+  allKeyEls.push(el);
+  return el;
+}
+
+function buildKeyboard() {
+  const kbd = document.getElementById('keyboard');
+
+  // Fn row
+  const fnRow = document.createElement('div');
+  fnRow.className = 'key-row fn-row';
+  FN_ROW.forEach(k => fnRow.appendChild(makeKeyEl(k, true)));
+  kbd.appendChild(fnRow);
+
+  // Main rows
+  MAIN_ROWS.forEach(row => {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'key-row';
+    row.forEach(k => rowEl.appendChild(makeKeyEl(k)));
+    kbd.appendChild(rowEl);
+  });
+
+  // Bottom row + arrows
+  const botRow = document.createElement('div');
+  botRow.className = 'key-row';
+  botRow.style.alignItems = 'flex-end';
+  BOTTOM_ROW.forEach(k => botRow.appendChild(makeKeyEl(k)));
+
+  // ← arrow
+  botRow.appendChild(makeKeyEl({ l:'←', c:'ArrowLeft',  f:0.9 }));
+
+  // ↑/↓ stacked
+  const udWrap = document.createElement('div');
+  udWrap.className = 'arrow-ud';
+  udWrap.style.flex = 0.9;
+  udWrap.appendChild(makeKeyEl({ l:'↑', c:'ArrowUp',   f:1 }, false, true));
+  udWrap.appendChild(makeKeyEl({ l:'↓', c:'ArrowDown', f:1 }, false, true));
+  botRow.appendChild(udWrap);
+
+  // → arrow
+  botRow.appendChild(makeKeyEl({ l:'→', c:'ArrowRight', f:0.9 }));
+
+  kbd.appendChild(botRow);
+
+  // Mouse events
+  allKeyEls.forEach(el => {
+    el.addEventListener('mousedown', e => { e.preventDefault(); pressKey(el); });
+    el.addEventListener('mouseup',   () => releaseKey(el));
+    el.addEventListener('mouseleave',() => releaseKey(el));
+  });
+
+  // Caps-lock mouse click: toggle LED (physical keyboard LED is synced via keyup)
+  const capsLockEl = document.getElementById('caps-lock-key');
+  if (capsLockEl) {
+    capsLockEl.addEventListener('mousedown', () => {
+      capsOn = !capsOn;
+      capsLockEl.classList.toggle('caps-on', capsOn);
+    });
+  }
+}
+
+// ─── Ripple engine (parameters are mutable via sliders) ──────────────────────
+let SPEED        = 1.1;    // ms per pixel
+let MAX_DIST     = 750;    // px
+let SWELL_MAX    = 0.045;  // how much key expands above 1.0 at wave peak  (e.g. 0.045 → 104.5%)
+let SWELL_MIN    = 0.0;    // how much key compresses below 1.0 in trough  (e.g. 0.05  → 95%)
+let GLOW         = 0.14;   // brightness amplitude
+let GLOW_OPACITY = 0.08;   // max flash overlay opacity at wave origin (0 = invisible)
+let shimmerOn    = false;  // holographic shimmer on ripple wave
+
+function getCenter(el) {
+  const r = el.getBoundingClientRect();
+  return { x: r.left + r.width * 0.5, y: r.top + r.height * 0.5 };
+}
+
+function fireRipple(srcEl) {
+  const o = getCenter(srcEl);
+
+  allKeyEls.forEach(el => {
+    if (el === srcEl) return;
+
+    const c    = getCenter(el);
+    const dist = Math.hypot(c.x - o.x, c.y - o.y);
+    if (dist > MAX_DIST) return;
+
+    const t      = 1 - dist / MAX_DIST;
+    const delay  = Math.round(dist * SPEED);
+    const rMax   = (1 + SWELL_MAX * t).toFixed(3);   // peak expansion
+    const rMin   = (1 - SWELL_MIN * t).toFixed(3);   // trough compression
+    const bright = (1 + GLOW  * t).toFixed(2);
+    const dur    = Math.round(380 + 120 * (1 - t));
+
+    el.classList.remove('ripple-wave');
+    void el.offsetWidth;
+
+    el.style.setProperty('--r-delay',  delay  + 'ms');
+    el.style.setProperty('--r-max',    rMax);
+    el.style.setProperty('--r-min',    rMin);
+    el.style.setProperty('--r-bright', bright);
+    el.style.setProperty('--r-dur',    dur + 'ms');
+    el.classList.add('ripple-wave');
+
+    setTimeout(() => el.classList.remove('ripple-wave'), delay + dur + 60);
+
+    // White flash overlay — visible in both dark and white-key modes
+    const flash = document.createElement('span');
+    flash.className = shimmerOn ? 'key-wave-flash shimmer' : 'key-wave-flash';
+    flash.style.setProperty('--r-dur',   dur   + 'ms');
+    flash.style.setProperty('--r-delay', delay + 'ms');
+    flash.style.setProperty('--r-flash', (GLOW_OPACITY * t).toFixed(3));
+    if (shimmerOn) {
+      // Gradient angle points away from the pressed key → radial shimmer from source
+      const angleDeg = Math.atan2(c.y - o.y, c.x - o.x) * 180 / Math.PI + 90;
+      flash.style.setProperty('--shimmer-angle', angleDeg.toFixed(1) + 'deg');
+    }
+    el.appendChild(flash);
+    setTimeout(() => flash.remove(), delay + dur + 100);
+  });
+}
+
+// ─── Press / release ──────────────────────────────────────────────────────────
+let capsOn = false;
+
+function spawnTouchRipple(el) {
+  const w = el.offsetWidth;
+  const h = el.offsetHeight;
+  const size = Math.max(w, h) * 2.2;   // large enough to always fill the key
+  const span = document.createElement('span');
+  span.className = 'key-ripple';
+  span.style.width  = size + 'px';
+  span.style.height = size + 'px';
+  span.style.left   = ((w - size) / 2) + 'px';
+  span.style.top    = ((h - size) / 2) + 'px';
+  el.appendChild(span);
+  span.addEventListener('animationend', () => span.remove(), { once: true });
+}
+
+// ─── Audio (Tone.js) ─────────────────────────────────────────────────────────
+let _synth = null;
+
+function _ensureAudio() {
+  if (_synth) return;
+  Tone.start().then(() => {
+    _synth = new Tone.PolySynth(Tone.Synth, {
+      oscillator: { type: 'triangle' },
+      envelope: { attack: 0.004, decay: 0.28, sustain: 0.04, release: 1.4 },
+      volume: -10,
+    }).toDestination();
+  });
+}
+
+function _playNote(el) {
+  if (!_synth || !el.dataset.note) return;
+  try { _synth.triggerAttackRelease(el.dataset.note, '8n'); } catch (_) {}
+}
+
+function pressKey(el) {
+  el.classList.remove('ripple-wave');
+  el.classList.add('active');
+  spawnTouchRipple(el);
+  fireRipple(el);
+  _playNote(el);
+}
+
+function releaseKey(el) {
+  el.classList.remove('active');
+}
+
+// ─── Physical keyboard ────────────────────────────────────────────────────────
+// CapsLock fires keydown ONCE when turning ON, but TWICE when turning OFF on macOS.
+// Debounce to 250 ms so the phantom second event is ignored for both LED and animation.
+let capsLastMs = 0;
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'CapsLock') {
+    const now = performance.now();
+    if (now - capsLastMs > 250) {
+      capsLastMs = now;
+      capsOn = !capsOn;
+      const capEl = document.getElementById('caps-lock-key');
+      if (capEl) capEl.classList.toggle('caps-on', capsOn);
+      const capsEl = codeToEl.get('CapsLock');
+      if (capsEl) {
+        pressKey(capsEl);
+        setTimeout(() => releaseKey(capsEl), 150);
+      }
+    }
+    return;
+  }
+  const el = codeToEl.get(e.code);
+  if (el) pressKey(el);
+});
+
+document.addEventListener('keyup', e => {
+  if (e.code === 'CapsLock') return;  // handled entirely in keydown
+  const el = codeToEl.get(e.code);
+  if (el) releaseKey(el);
+});
+
+// Release all keys when window loses focus (e.g. Command+Tab steals focus
+// before keyup fires, leaving modifier keys stuck in .active state)
+window.addEventListener('blur', () => {
+  allKeyEls.forEach(el => el.classList.remove('active'));
+});
+
+// ─── Slider controls ─────────────────────────────────────────────────────────
+function updateTrackFill(sl) {
+  const min = parseFloat(sl.min), max = parseFloat(sl.max), val = parseFloat(sl.value);
+  const pct = ((val - min) / (max - min)) * 100;
+  sl.style.background = `linear-gradient(to right, rgba(255,255,255,0.40) ${pct}%, rgba(0,0,0,0.05) ${pct}%)`;
+}
+
+function wire(id, valId, fmt, onChange) {
+  const sl  = document.getElementById(id);
+  const val = document.getElementById(valId);
+  updateTrackFill(sl);
+  sl.addEventListener('input', () => {
+    val.textContent = fmt(parseFloat(sl.value));
+    onChange(parseFloat(sl.value));
+    updateTrackFill(sl);
+  });
+}
+
+wire('sl-speed', 'val-speed',
+  v => v.toFixed(1),
+  v => { SPEED = v; });
+
+wire('sl-reach', 'val-reach',
+  v => v.toFixed(1) + ' px',
+  v => { MAX_DIST = v; });
+
+wire('sl-smax', 'val-smax',
+  v => v.toFixed(1) + ' %',
+  v => { SWELL_MAX = (v - 100) / 100; });
+
+wire('sl-smin', 'val-smin',
+  v => v.toFixed(1) + ' %',
+  v => { SWELL_MIN = (100 - v) / 100; });
+
+wire('sl-glow', 'val-glow',
+  v => v.toFixed(1) + ' %',
+  v => { GLOW_OPACITY = v / 100; });
+
+document.getElementById('plate-toggle').addEventListener('change', function () {
+  document.getElementById('keyboard-shell').style.setProperty('--plate-a', this.checked ? '1' : '0');
+});
+
+document.getElementById('glow-color-pick').addEventListener('input', function () {
+  document.documentElement.style.setProperty('--glow-color', this.value);
+});
+
+document.getElementById('shimmer-btn').addEventListener('click', function () {
+  shimmerOn = !shimmerOn;
+  this.classList.toggle('active', shimmerOn);
+});
+
+// ─── Key colour ───────────────────────────────────────────────────────────────
+const KEY_STYLES = {
+  dark: {
+    '--key-bg':        'linear-gradient(175deg, #2A2A2D 0%, #1E1E21 50%, #161618 100%)',
+    '--key-color':     '#CECECE',
+    '--key-sub-color': '#888890',
+    /* --key-shadow not listed → will be removed so :root default is inherited */
+  },
+  white: {
+    '--key-bg':        'rgba(255, 255, 255, 0.20)',
+    '--key-color':     'rgba(255, 255, 255, 0.92)',
+    '--key-sub-color': 'rgba(255, 255, 255, 0.50)',
+    '--key-shadow':    'none',
+  },
+};
+
+document.getElementById('key-colour-opts').addEventListener('click', e => {
+  const btn = e.target.closest('[data-key-style]');
+  if (!btn) return;
+  const mode  = btn.dataset.keyStyle;
+  const style = KEY_STYLES[mode];
+  const shell = document.getElementById('keyboard-shell');
+  btn.closest('.ctrl-opt-row').querySelectorAll('.ctrl-opt').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  ['--key-bg','--key-color','--key-sub-color','--key-shadow'].forEach(k => shell.style.removeProperty(k));
+  Object.entries(style).forEach(([k, v]) => shell.style.setProperty(k, v));
+  shell.classList.toggle('white-mode', mode === 'white');
+});
+
+// ─── Background options (add more objects to BG_OPTIONS to extend) ────────────
+const BG_OPTIONS = [
+  {
+    id: 'space-grey',
+    label: 'Space Grey',
+    value: 'linear-gradient(135deg, #CECECE 0%, #8E8E94 100%)',
+  },
+  {
+    id: 'malibu',
+    label: 'Malibu',
+    value: `linear-gradient(to bottom,
+      #80C8F0  0%,
+      #DCAA7C 36%,
+      #EC7858  64%,
+      #D84838 100%)`,
+  },
+  {
+    id: 'soft-dawn',
+    label: 'Soft Dawn',
+    value: `linear-gradient(to bottom,
+      #90B8F8  0%,
+      #B098F0 28%,
+      #CC88DC 55%,
+      #E890B0 80%,
+      #F4B0B0 100%)`,
+  },
+  {
+    id: 'blue-skies',
+    label: 'Blue Skies',
+    value: `linear-gradient(160deg,
+      #58A8E0  0%,
+      #7EC4F0 35%,
+      #AADCFA 65%,
+      #C6E8FF 100%)`,
+  },
+  {
+    id: 'rio',
+    label: 'Rio',
+    value: `radial-gradient(150% 80% at 50% 100%,
+      #F5A800  0%,
+      #F5C038 20%,
+      #F5DC80 42%,
+      #EEE8C8 64%,
+      #F0EDE6 100%)`,
+  },
+  {
+    id: 'midnight',
+    label: 'Midnight',
+    value: `linear-gradient(135deg,
+      #1A1848  0%,
+      #3A2E80 38%,
+      #7A5CB8 72%,
+      #B088D8 100%)`,
+  },
+  // ← add future options here
+];
+
+(() => {
+  const container = document.getElementById('bg-opts');
+  BG_OPTIONS.forEach((opt, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'ctrl-bg-swatch' + (i === 0 ? ' active' : '');
+    btn.dataset.bgId   = opt.id;
+    btn.dataset.label  = opt.label;
+    btn.style.background = opt.value;
+    btn.addEventListener('click', () => {
+      const fade = document.getElementById('bg-fade');
+      fade.style.transition = 'none';
+      fade.style.background = document.body.style.background || BG_OPTIONS[0].value;
+      fade.style.opacity = '1';
+      document.body.style.background = opt.value;
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        fade.style.transition = 'opacity 0.55s ease';
+        fade.style.opacity = '0';
+      }));
+      container.querySelectorAll('.ctrl-bg-swatch').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+    container.appendChild(btn);
+  });
+})();
+
+// ─── Viewport scaling ─────────────────────────────────────────────────────────
+function scaleToFit() {
+  const shell = document.getElementById('keyboard-shell');
+  const zone  = document.getElementById('controls-zone');
+  const panel = document.getElementById('controls-panel');
+  const vw    = window.innerWidth - 40;
+  const kw    = shell.offsetWidth;
+  const scale = Math.min(1, vw / kw);
+
+  shell.style.transform = `scale(${scale})`;
+  shell.style.marginBottom = `${(scale - 1) * shell.offsetHeight}px`;
+
+  // Scale the zone wrapper (contains the panel); panel inherits the scale
+  zone.style.transform = `scale(${scale})`;
+  zone.style.marginBottom = `${(scale - 1) * panel.offsetHeight}px`;
+}
+
+window.addEventListener('resize', scaleToFit);
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+buildKeyboard();
+
+// Assign a note to every key — spread C major across 4 octaves, low→high left→right top→bottom
+(function assignNotes() {
+  const notes = [];
+  [3, 4, 5, 6].forEach(oct => ['C','D','E','F','G','A','B'].forEach(n => notes.push(n + oct)));
+  allKeyEls.forEach((el, i) => {
+    el.dataset.note = notes[Math.round(i / (allKeyEls.length - 1) * (notes.length - 1))];
+  });
+})();
+
+// Initialise audio on first user gesture (browser requires this)
+document.addEventListener('pointerdown', _ensureAudio, { once: true });
+document.addEventListener('keydown',     _ensureAudio, { once: true });
+
+const _introShell = document.getElementById('keyboard-shell');
+const _introKb    = document.getElementById('keyboard');
+_introShell.style.opacity = '0';
+_introKb.style.transform  = 'scale(0.96)';
+_introKb.style.transition = 'none';
+
+requestAnimationFrame(() => {
+  scaleToFit();
+  requestAnimationFrame(() => {
+    _introShell.style.transition = 'opacity 0.7s ease-out';
+    _introKb.style.transition    = 'transform 0.65s cubic-bezier(0.22, 1, 0.36, 1)';
+    _introShell.style.opacity    = '1';
+    _introKb.style.transform     = 'scale(1)';
+    setTimeout(() => {
+      const src = document.getElementById('space-key') ||
+                  allKeyEls[allKeyEls.length >> 1];
+      if (src) fireRipple(src);
+    }, 450);
+    setTimeout(_initHint, 900);
+  });
+});
+
+// ─── Hint text state machine ──────────────────────────────────────────────────
+const _hint        = document.getElementById('hint-text');
+const _ctrlZone    = document.getElementById('controls-zone');
+let   _keyDone     = false;   // user has interacted with a key — hint gone forever
+let   _ctrlsOpen   = false;   // controls zone currently hovered
+let   _hintShown   = false;   // whether hint is currently visible
+let   _idleTimer   = null;
+const IDLE_MS      = 30000;
+
+function _showHint(withShimmer) {
+  if (_keyDone || _hintShown) return;
+  _hintShown = true;
+  _hint.style.opacity = '1';
+  if (withShimmer) {
+    _hint.classList.remove('shimmer-run');
+    void _hint.offsetWidth; // force reflow to restart animation
+    _hint.classList.add('shimmer-run');
+  }
+}
+
+function _hideHint() {
+  if (!_hintShown) return;
+  _hintShown = false;
+  _hint.style.opacity = '0';
+}
+
+function _resetIdle() {
+  clearTimeout(_idleTimer);
+  if (_keyDone) return;
+  _idleTimer = setTimeout(() => {
+    if (!_keyDone && !_ctrlsOpen) _showHint(true);
+  }, IDLE_MS);
+}
+
+// Key interaction — permanent dismiss
+function _onKeyInteract() {
+  _keyDone = true;
+  _hideHint();
+  clearTimeout(_idleTimer);
+  document.getElementById('keyboard').removeEventListener('pointerdown', _onKeyInteract);
+  document.removeEventListener('keydown', _onKeyInteract);
+}
+document.getElementById('keyboard').addEventListener('pointerdown', _onKeyInteract);
+document.addEventListener('keydown', _onKeyInteract);
+
+// Controls hover — temporary hide / restore
+_ctrlZone.addEventListener('mouseenter', () => {
+  _ctrlsOpen = true;
+  _hideHint();
+  clearTimeout(_idleTimer);
+});
+_ctrlZone.addEventListener('mouseleave', () => {
+  _ctrlsOpen = false;
+  if (!_keyDone) {
+    _showHint(false);
+    _resetIdle();
+  }
+});
+
+// Activity resets idle timer
+document.addEventListener('mousemove', _resetIdle, { passive: true });
+
+// Boot: called after keyboard reveal to show hint initially
+function _initHint() {
+  _hintShown = true;
+  _hint.style.opacity = '1';
+  _hint.classList.add('shimmer-run');
+  _resetIdle();
+}
+</script>
+</body>
+</html>
